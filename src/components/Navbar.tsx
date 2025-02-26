@@ -1,8 +1,9 @@
 
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, Wallet } from 'lucide-react';
+import { Moon, Sun, Wallet, Github } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '@/components/ui/use-toast';
 
 declare global {
   interface Window {
@@ -13,7 +14,9 @@ declare global {
 export default function Navbar() {
   const [isDark, setIsDark] = useState(false);
   const [isWalletConnected, setIsWalletConnected] = useState(false);
+  const [isGithubConnected, setIsGithubConnected] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const toggleTheme = () => {
     setIsDark(!isDark);
@@ -25,11 +28,39 @@ export default function Navbar() {
       try {
         await window.ethereum.request({ method: 'eth_requestAccounts' });
         setIsWalletConnected(true);
+        toast({
+          title: "Wallet Connected",
+          description: "Your MetaMask wallet has been connected successfully.",
+        });
       } catch (error) {
         console.error('User denied wallet connection');
+        toast({
+          variant: "destructive",
+          title: "Connection Failed",
+          description: "Failed to connect to MetaMask wallet.",
+        });
       }
     } else {
       window.open('https://metamask.io/download.html', '_blank');
+    }
+  };
+
+  const connectGithub = async () => {
+    const clientId = 'your-github-client-id'; // Replace with your GitHub OAuth App client ID
+    const redirectUri = `${window.location.origin}/dashboard`;
+    const githubUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=repo,user`;
+    
+    try {
+      window.location.href = githubUrl;
+      setIsGithubConnected(true);
+      localStorage.setItem('github_connecting', 'true');
+    } catch (error) {
+      console.error('GitHub connection error:', error);
+      toast({
+        variant: "destructive",
+        title: "Connection Failed",
+        description: "Failed to connect to GitHub.",
+      });
     }
   };
 
@@ -67,6 +98,14 @@ export default function Navbar() {
             >
               <Wallet className="h-5 w-5" />
               <span>{isWalletConnected ? 'Connected' : 'Connect Wallet'}</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="flex items-center space-x-2 bg-primary/10 hover:bg-primary/20"
+              onClick={connectGithub}
+            >
+              <Github className="h-5 w-5" />
+              <span>{isGithubConnected ? 'Connected' : 'Connect GitHub'}</span>
             </Button>
           </div>
         </div>
