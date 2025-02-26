@@ -4,6 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Moon, Sun, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
 export default function Navbar() {
   const [isDark, setIsDark] = useState(false);
   const [isWalletConnected, setIsWalletConnected] = useState(false);
