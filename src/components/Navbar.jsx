@@ -1,22 +1,28 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Moon, Sun, Wallet, Github } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useToast } from "@/components/ui/use-toast";
+import axios from "axios";
 
 export default function Navbar() {
   const [isDark, setIsDark] = useState(false);
   const [walletAddress, setWalletAddress] = useState(null);
   const [isGithubConnected, setIsGithubConnected] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
 
   useEffect(() => {
     const savedWallet = localStorage.getItem("wallet_address");
     if (savedWallet) setWalletAddress(savedWallet);
 
-    const savedGithub = localStorage.getItem("github_token");
-    if (savedGithub) setIsGithubConnected(true);
+    const savedGithubToken = localStorage.getItem("github_token");
+    if (savedGithubToken) {
+      setIsGithubConnected(true);
+    } else {
+      checkGitHubAuth();
+    }
   }, []);
 
   const toggleTheme = () => {
@@ -29,7 +35,7 @@ export default function Navbar() {
       try {
         const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
         setWalletAddress(accounts[0]);
-        localStorage.setItem("wallet_address", accounts[0]); // Store in localStorage
+        localStorage.setItem("wallet_address", accounts[0]);
 
         toast({
           title: "Wallet Connected",
@@ -48,13 +54,32 @@ export default function Navbar() {
     }
   };
 
-  const connectGithub = async () => {
-    const clientId = "Ov23liE3RGzaFceTnrDf";
-    const redirectUri = `${window.location.origin}/dashboard`;
+  const connectGithub = () => {
+    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID;
+    const redirectUri = "http://localhost:8080/auth/github/callback";
     const githubUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=repo,user`;
 
     window.location.href = githubUrl; // Redirect to GitHub OAuth
     localStorage.setItem("github_connecting", "true");
+  };
+
+  // Check for GitHub OAuth Callback
+  const checkGitHubAuth = async () => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const code = queryParams.get("code");
+
+    if (code) {
+      try {
+        const response = await axios.get("http://localhost:8080/auth/github/callback", { code });
+        localStorage.setItem("github_token", response.data.token);
+        setIsGithubConnected(true);
+        toast({ title: "GitHub Connected", description: "GitHub login successful!" });
+        navigate("/dashboard"); // Redirect user to dashboard
+      } catch (error) {
+        console.error("GitHub authentication failed:", error);
+        toast({ variant: "destructive", title: "GitHub Login Failed", description: "Please try again." });
+      }
+    }
   };
 
   return (

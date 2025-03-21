@@ -7,6 +7,9 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      "/auth/github": "http://localhost:5000",
+    },
   },
   plugins: [react()], // Removed componentTagger()
   resolve: {

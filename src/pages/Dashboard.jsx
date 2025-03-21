@@ -10,36 +10,51 @@ const Dashboard = () => {
   const [userData, setUserData] = useState(null);
   const [walletAddress, setWalletAddress] = useState(null);
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
 
-  // 🔹 Load wallet from localStorage
+  // ✅ 1. Check if GitHub OAuth redirected the user
   useEffect(() => {
     const savedWallet = localStorage.getItem("wallet_address");
     if (savedWallet) setWalletAddress(savedWallet);
-
-    fetchGithubData();
+  
+    const savedUser = localStorage.getItem("github_user");
+    if (savedUser) {
+      setUserData(JSON.parse(savedUser));
+    } else {
+      const userParam = searchParams.get("user");
+      if (userParam) {
+        const user = JSON.parse(decodeURIComponent(userParam));
+        localStorage.setItem("github_user", JSON.stringify(user));
+        setUserData(user);
+      } else {
+        fetchGithubData(); // If no OAuth param, fetch from backend
+      }
+    }
   }, []);
+  
 
-  // 🔹 Fetch GitHub Data (if connected)
+  // ✅ 2. Fetch GitHub Data from Backend Session
   const fetchGithubData = async () => {
-    const token = localStorage.getItem("github_token");
-    if (!token) return;
-
     try {
-      const res = await fetch("https://api.github.com/user", {
-        headers: { Authorization: `token ${token}` },
+      const res = await fetch("http://localhost:5000/user", {
+        credentials: "include",
       });
-      const data = await res.json();
-      setUserData(data);
+      if (res.ok) {
+        const data = await res.json();
+        setUserData(data);
+        localStorage.setItem("github_user", JSON.stringify(data));
+      } else {
+        setUserData(null);
+      }
     } catch (error) {
       console.error("GitHub API Error:", error);
     }
   };
 
-  // 🔹 Connect MetaMask Wallet
+  // ✅ 3. Connect MetaMask Wallet
   const connectWallet = async () => {
     if (typeof window.ethereum !== "undefined") {
       try {
-        // Request permissions to prompt MetaMask for password
         await window.ethereum.request({
           method: "wallet_requestPermissions",
           params: [{ eth_accounts: {} }],
