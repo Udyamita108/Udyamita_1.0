@@ -8,17 +8,23 @@ const cookieParser = require("cookie-parser");
 
 const app = express();
 const PORT = 5000;
+const CLIENT_URL = "http://localhost:8080"; // Your frontend URL
 
 // Middleware
-app.use(cors({ origin: "http://localhost:8080", credentials: true }));
+app.use(cors({ origin: CLIENT_URL, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "default_secret", // Use a fallback for debugging
+    secret: process.env.SESSION_SECRET || "default_secret",
     resave: false,
     saveUninitialized: true,
+    cookie: {
+      secure: process.env.NODE_ENV === "production", // Use secure cookies in production
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
   })
 );
 
@@ -31,11 +37,12 @@ passport.use(
     {
       clientID: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      callbackURL: "http://localhost:8080/auth/github/callback",
+      callbackURL: "http://localhost:5000/auth/github/callback",
+      scope: ["user", "repo"] // Add necessary scopes
     },
     function (accessToken, refreshToken, profile, done) {
-      console.log("GitHub Profile Data:", profile); // Debugging
-      profile.accessToken = accessToken; // Store token in session
+      // Store access token with the profile
+      profile.accessToken = accessToken;
       return done(null, profile);
     }
   )
@@ -45,6 +52,7 @@ passport.use(
 passport.serializeUser((user, done) => {
   done(null, user);
 });
+
 passport.deserializeUser((obj, done) => {
   done(null, obj);
 });
@@ -55,15 +63,17 @@ app.get("/", (req, res) => {
 });
 
 // GitHub OAuth Login Route
-app.get("/auth/github", passport.authenticate("github", { scope: ["user:email"] }));
+app.get("/auth/github", 
+  passport.authenticate("github", { scope: ["user", "repo"] })
+);
 
 // GitHub OAuth Callback Route
 app.get(
   "/auth/github/callback",
-  passport.authenticate("github", { failureRedirect: "http://localhost:8080", }),
+  passport.authenticate("github", { failureRedirect: `${CLIENT_URL}/login` }),
   (req, res) => {
-    console.log("Authenticated User:", req.user); // Debugging
-    res.redirect(`http://localhost:8080/dashboard?user=${encodeURIComponent(JSON.stringify(req.user))}`);
+    // Redirect with user data in the URL
+    res.redirect(`${CLIENT_URL}/dashboard?user=${encodeURIComponent(JSON.stringify(req.user))}`);
   }
 );
 
@@ -82,7 +92,7 @@ app.get("/logout", (req, res, next) => {
     if (err) return next(err);
     req.session.destroy(() => {
       res.clearCookie("connect.sid"); // Clear session cookie
-      res.redirect("http://localhost:8080");
+      res.status(200).json({ message: "Logged out successfully" });
     });
   });
 });
