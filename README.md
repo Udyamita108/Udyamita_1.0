@@ -161,5 +161,3 @@ This project is licensed under the MIT License. See `LICENSE` for more info.
 
 Developed with ❤️ by Team Udyamita.
 ```
-
-\
