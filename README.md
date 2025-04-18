@@ -1,3 +1,6 @@
+Certainly! Here's the entire `README.md` content in one place so you can directly copy it:
+
+```markdown
 # 🚀 BlockSource: Code to Crypto
 
 A decentralized platform that rewards open-source contributors with crypto tokens. Built on top of GitHub and Ethereum, BlockSource transforms meaningful contributions into provable reputation and tangible value.
@@ -54,91 +57,109 @@ A decentralized platform that rewards open-source contributors with crypto token
 ```bash
 git clone https://github.com/Udyamita108/Udyamita_1.0.git
 cd Udyamita_1.0
-2️⃣ Start the Backend
-bash
-Copy
-Edit
+```
+
+#### 2️⃣ Start the Backend
+
+```bash
 cd backend
 node server/server.js
-⚠️ Make sure you're inside the backend folder before running the command.
+```
 
-3️⃣ Start the Frontend
-Open a new terminal:
+> ⚠️ Make sure you're inside the `backend` folder before running the command.
 
-bash
-Copy
-Edit
+#### 3️⃣ Start the Frontend
+
+Open a **new terminal**:
+
+```bash
 cd frontend
 npm install
 npm run dev
-⚠️ Ensure you are in the frontend folder before running the above command.
+```
 
-🔐 Authentication
-GitHub OAuth: Click Connect GitHub on the dashboard to link your contributions.
+> ⚠️ Ensure you are in the `frontend` folder before running the above command.
 
-MetaMask Wallet: Connect your wallet for receiving UCN rewards and participating in governance.
+---
 
-💸 Tokenomics
-Token Name: UCoin
+## 🔐 Authentication
 
-Symbol: UCN
+- **GitHub OAuth**: Click *Connect GitHub* on the dashboard to link your contributions.
+- **MetaMask Wallet**: Connect your wallet for receiving `UCN` rewards and participating in governance.
 
-Supply: Fixed
+---
 
-70% → Reward Treasury
+## 💸 Tokenomics
 
-30% → Dev Wallet
+- **Token Name**: UCoin
+- **Symbol**: UCN
+- **Supply**: Fixed
+  - 70% → Reward Treasury
+  - 30% → Dev Wallet
 
-Smart contracts are upgradeable and currently live on the Sepolia testnet.
+Smart contracts are upgradeable and currently live on the **Sepolia testnet**.
 
-🧮 XP & Title System
-50 XP per GitHub event (PRs, commits, etc.)
+---
 
-20+ Titles, 100+ levels
+## 🧮 XP & Title System
 
-Roles:
+- **50 XP** per GitHub event (PRs, commits, etc.)
+- **20+ Titles**, 100+ levels
+- Roles:
+  - 👨‍💻 Contributor (0 – 15,000 XP)
+  - 🔍 Reviewer (15,000+ XP)
+  - 🧙‍♂️ Supreme (505,000+ XP)
 
-👨‍💻 Contributor (0 – 15,000 XP)
+---
 
-🔍 Reviewer (15,000+ XP)
+## 📬 Contributing
 
-🧙‍♂️ Supreme (505,000+ XP)
-
-📬 Contributing
 We ❤️ contributors! To get involved:
 
-Fork the repo
+1. Fork the repo
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Push to your branch and open a PR
+4. Wait for review and merge
 
-Create a feature branch: git checkout -b feature/your-feature
+---
 
-Push to your branch and open a PR
+## 🧪 Testing & Contracts
 
-Wait for review and merge
-
-🧪 Testing & Contracts
 Smart contracts are written in Solidity and deployed using Hardhat.
 
 To deploy locally:
 
-bash
-Copy
-Edit
+```bash
 npx hardhat run scripts/deploy.js --network localhost
+```
+
 To deploy on Sepolia:
 
-bash
-Copy
-Edit
+```bash
 npx hardhat run scripts/deploy.js --network sepolia
-Update .env with your API key and private key before deploying.
+```
 
-🔗 Useful Links
-Sepolia Explorer
+> Update `.env` with your API key and private key before deploying.
 
-MetaMask
+---
 
-GitHub OAuth Setup
+## 🔗 Useful Links
 
-🙌 Credits
+- [Sepolia Explorer](https://sepolia.etherscan.io/)
+- [MetaMask](https://metamask.io/)
+- [GitHub OAuth Setup](https://docs.github.com/en/developers/apps/building-oauth-apps)
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License. See `LICENSE` for more info.
+
+---
+
+## 🙌 Credits
+
 Developed with ❤️ by Team Udyamita108.
 ```
+
+You can now copy this entire block directly into your `README.md` file! Let me know if you need any further modifications.
