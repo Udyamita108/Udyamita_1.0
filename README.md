@@ -1,4 +1,4 @@
-Certainly! Here's the entire `README.md` content in one place so you can directly copy it:
+
 
 ```markdown
 # 🚀 BlockSource: Code to Crypto
@@ -159,7 +159,7 @@ This project is licensed under the MIT License. See `LICENSE` for more info.
 
 ## 🙌 Credits
 
-Developed with ❤️ by Team Udyamita108.
+Developed with ❤️ by Team Udyamita.
 ```
 
-You can now copy this entire block directly into your `README.md` file! Let me know if you need any further modifications.
+\
