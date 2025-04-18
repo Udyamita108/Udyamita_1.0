@@ -1,0 +1,324 @@
+// Keep original require statements
+require("dotenv").config();
+const session = require("express-session");
+const express = require("express");
+const cors = require("cors");
+const passport = require("passport");
+const GitHubStrategy = require("passport-github2").Strategy;
+const cookieParser = require("cookie-parser");
+const { ethers } = require('ethers'); // Ethers is needed
+
+// --- Load Contract ABIs ---
+let RewardMechanismABI;
+let UserDatabaseABI; // <<< Added
+
+try {
+    RewardMechanismABI = require('../src/abis/RewardMechanism.json'); // Adjust path if needed
+    UserDatabaseABI = require('../src/abis/UserDatabase.json'); // <<< Added: Adjust path if needed
+} catch (error) {
+    console.error("FATAL ERROR: Could not load required ABI file(s). Check paths.");
+    console.error(error);
+    process.exit(1); // Exit if ABIs are missing
+}
+// --- End ABI Loading ---
+
+// --- Environment Variable Checks (Recommended) ---
+const requiredEnvVars = [
+    'SESSION_SECRET',
+    'GITHUB_CLIENT_ID',
+    'GITHUB_CLIENT_SECRET',
+    'ALCHEMY_API_KEY', // Or your RPC_URL (used by both contracts)
+    'PRIVATE_KEY',     // Server's wallet private key (MUST have XP_UPDATER_ROLE and be Owner of RewardMechanism)
+    'REWARD_CONTRACT_ADDRESS',
+    'USER_DATABASE_CONTRACT_ADDRESS' // <<< Added
+];
+requiredEnvVars.forEach(envVar => {
+    if (!process.env[envVar]) {
+        // Use console.error for critical missing vars
+        console.error(`Error: Environment variable ${envVar} is not set. Server cannot start correctly.`);
+        process.exit(1); // Exit if critical env var is missing
+    }
+});
+// --- End Env Var Checks ---
+
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:8080";
+
+// Keep original Middleware setup
+app.use(cors({ origin: CLIENT_URL, credentials: true }));
+app.use(express.json());
+app.use(cookieParser());
+app.use(express.urlencoded({ extended: true }));
+
+// Keep original error handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Keep original Session configuration
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: process.env.NODE_ENV === "production" ? 'lax' : 'lax'
+    }
+  })
+);
+
+// Keep original Passport initialization
+app.use(passport.initialize());
+app.use(passport.session());
+
+
+// Keep original GitHub OAuth Strategy
+passport.use(
+  new GitHubStrategy(
+    {
+      clientID: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      callbackURL: "/auth/github/callback",
+      scope: ["user:email", "read:user", "repo"]
+    },
+    function (accessToken, refreshToken, profile, done) {
+      const userProfile = { ...profile, accessToken: accessToken };
+      return done(null, userProfile);
+    }
+  )
+);
+
+// Keep original Serialize & Deserialize User logic
+passport.serializeUser((user, done) => {
+  done(null, { id: user.id, username: user.username, accessToken: user.accessToken, displayName: user.displayName, photos: user.photos, profileUrl: user.profileUrl, _json: user._json });
+});
+
+passport.deserializeUser((sessionUser, done) => {
+  done(null, sessionUser);
+});
+
+// Keep original `ensureAuthenticated` middleware
+function ensureAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.status(401).json({ error: 'Not authenticated' });
+}
+
+
+// --- Keep Original Routes ---
+
+app.get("/", (req, res) => {
+  res.send("🚀 GitHub OAuth Server is Running!");
+});
+
+app.get("/auth/github", passport.authenticate("github"));
+
+app.get("/auth/github/callback",
+  passport.authenticate("github", {
+      failureRedirect: `${CLIENT_URL}/login-failed`,
+      successReturnToOrRedirect: '/auth/success'
+  })
+);
+
+app.get('/auth/success', (req, res) => {
+    console.log("GitHub authentication successful for:", req.user?.username);
+    res.redirect(`${CLIENT_URL}/dashboard`); // Or wherever user lands after login
+});
+
+app.get("/user", ensureAuthenticated, (req, res) => {
+    res.status(200).json(req.user);
+});
+
+app.get("/logout", (req, res, next) => {
+  const username = req.user?.username;
+  req.logout((err) => {
+    if (err) { console.error(`Logout error for ${username}:`, err); return next(err); }
+    req.session.destroy((destroyErr) => {
+       if (destroyErr) { console.error(`Session destruction error for ${username}:`, destroyErr); }
+      res.clearCookie("connect.sid", { path: '/' });
+      console.log(`User ${username || 'Unknown'} logged out.`);
+      res.status(200).json({ message: "Logged out successfully" });
+    });
+  });
+});
+
+// --- End of Original Routes ---
+
+
+// --- Existing Reward Allocation Endpoint (Unaffected) ---
+app.post('/api/allocate-level-rewards', ensureAuthenticated, async (req, res) => {
+    console.log(`API CALL: POST /api/allocate-level-rewards | User: ${req.user?.username}`);
+    const { walletAddress, amount } = req.body;
+
+    // Basic Input Validation
+    if (!walletAddress || !ethers.isAddress(walletAddress)) {
+        console.error("Validation Error (allocate-level-rewards): Invalid wallet address:", walletAddress);
+        return res.status(400).json({ error: 'Invalid Ethereum wallet address provided.' });
+    }
+    let amountFloat;
+    try {
+        if (!amount || typeof amount !== 'string') throw new Error("Amount missing or not a string.");
+        amountFloat = parseFloat(amount);
+        if (isNaN(amountFloat) || amountFloat <= 0) throw new Error("Amount must be positive.");
+        console.log(`Validated Input (allocate-level-rewards): Address=${walletAddress}, Amount=${amountFloat}`);
+    } catch (validationError) {
+        console.error("Validation Error (allocate-level-rewards): Invalid amount:", amount, validationError.message);
+        return res.status(400).json({ error: `Invalid reward amount: ${validationError.message}` });
+    }
+
+    try {
+        // Blockchain Setup
+        const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_API_KEY);
+        // IMPORTANT: This uses PRIVATE_KEY which must be the OWNER of RewardMechanism
+        const ownerWallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+        const rewardContract = new ethers.Contract(
+            process.env.REWARD_CONTRACT_ADDRESS,
+            RewardMechanismABI.abi,
+            ownerWallet
+        );
+        console.log(`(allocate-level-rewards) Contract owner wallet: ${ownerWallet.address}`);
+
+        // Convert Amount to Wei
+        const decimals = 18; // Assuming UCoin has 18 decimals
+        let amountWei;
+        try {
+            amountWei = ethers.parseUnits(amount, decimals);
+            console.log(`(allocate-level-rewards) Amount in Wei: ${amountWei.toString()}`);
+        } catch (parseError) {
+            console.error("Error parsing amount string to Wei (allocate-level-rewards):", amount, parseError);
+            return res.status(400).json({ error: `Invalid amount format for ${decimals} decimals.` });
+        }
+
+        // Execute allocateReward Transaction
+        console.log(`(allocate-level-rewards) Calling allocateReward(${walletAddress}, ${amountWei.toString()}) on ${await rewardContract.getAddress()}`);
+        const tx = await rewardContract.allocateReward(walletAddress, amountWei);
+        console.log(`(allocate-level-rewards) Allocation transaction sent. Hash: ${tx.hash}`);
+
+        res.status(200).json({
+            success: true,
+            message: `Allocation of ${amountFloat} UCoin initiated for ${walletAddress}.`,
+            txHash: tx.hash,
+            allocatedAmount: amount
+        });
+
+    } catch (error) {
+        console.error(`Blockchain Error during allocation for ${walletAddress} (allocate-level-rewards):`, error);
+        const reason = error.reason || error.data?.message || error.message || "Transaction failed on-chain.";
+        res.status(500).json({
+            success: false,
+            error: 'Failed to execute allocation transaction.',
+            details: reason
+        });
+    }
+});
+// --- End Existing Reward Allocation Endpoint ---
+
+
+// +++ NEW: Endpoint to Grant GitHub Connection XP +++
+// This endpoint is called by the frontend *after* a user is authenticated
+// via GitHub AND has connected their wallet.
+app.post('/api/grant-github-xp', ensureAuthenticated, async (req, res) => {
+    const githubUsername = req.user?.username; // Get GitHub username for logging
+    console.log(`API CALL: POST /api/grant-github-xp | GitHub User: ${githubUsername}`);
+    const { walletAddress } = req.body; // Expecting walletAddress from frontend
+
+    // --- Input Validation ---
+    if (!walletAddress || !ethers.isAddress(walletAddress)) {
+        console.error(`Validation Error (grant-github-xp): Invalid or missing wallet address: ${walletAddress} for user ${githubUsername}`);
+        return res.status(400).json({ error: 'Valid Ethereum wallet address is required.' });
+    }
+    console.log(`Validated Input (grant-github-xp): Wallet Address=${walletAddress} for user ${githubUsername}`);
+    // --- End Validation ---
+
+    try {
+        // --- Blockchain Setup (using Server's XP Updater credentials) ---
+        const provider = new ethers.JsonRpcProvider(process.env.ALCHEMY_API_KEY);
+        // IMPORTANT: This uses PRIVATE_KEY which MUST have the XP_UPDATER_ROLE in UserDatabase contract
+        const xpUpdaterWallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+        const userDatabaseContract = new ethers.Contract(
+            process.env.USER_DATABASE_CONTRACT_ADDRESS, // <<< Use the new env var
+            UserDatabaseABI.abi,                        // <<< Use the UserDatabase ABI
+            xpUpdaterWallet                             // <<< Use the server's wallet as signer
+        );
+        console.log(`(grant-github-xp) XP Updater wallet: ${xpUpdaterWallet.address}`);
+        console.log(`(grant-github-xp) Target UserDatabase contract: ${await userDatabaseContract.getAddress()}`);
+
+        // --- Execute grantGithubXP Transaction ---
+        // The contract itself handles checks for user existence and if XP was already granted.
+        console.log(`(grant-github-xp) Calling grantGithubXP(${walletAddress}) for user ${githubUsername}`);
+        const tx = await userDatabaseContract.grantGithubXP(walletAddress);
+        console.log(`(grant-github-xp) Grant XP transaction sent for ${walletAddress}. Hash: ${tx.hash}`);
+
+        // Respond quickly. Frontend can check leaderboard/user data later for confirmation.
+        res.status(200).json({
+            success: true,
+            message: `GitHub connection XP grant initiated for wallet ${walletAddress}.`,
+            txHash: tx.hash
+        });
+
+        // Optional: Wait for confirmation (increases response time)
+        // const receipt = await tx.wait(1); // Wait for 1 confirmation
+        // console.log(`(grant-github-xp) Grant XP transaction confirmed for ${walletAddress}. Block: ${receipt.blockNumber}`);
+        // res.status(200).json({
+        //     success: true,
+        //     message: `GitHub connection XP successfully granted to wallet ${walletAddress}.`,
+        //     txHash: tx.hash,
+        //     blockNumber: receipt.blockNumber
+        // });
+
+
+    } catch (error) {
+        console.error(`Blockchain Error during GitHub XP grant for ${walletAddress} (User: ${githubUsername}):`, error);
+        // Try to extract specific revert reasons
+        let reason = "Transaction failed on-chain.";
+        if (error.reason) {
+            reason = error.reason; // Ethers v6 specific revert reason
+        } else if (error.data && typeof error.data === 'string') {
+           // Attempt to decode simple string error data (less common now)
+           reason = error.data;
+        } else if (error.message) {
+           // Fallback to general error message
+           reason = error.message;
+        }
+
+        // Provide more specific feedback based on common contract reverts
+        let statusCode = 500; // Internal Server Error default
+        let clientMessage = 'Failed to grant GitHub XP due to a server or blockchain error.';
+
+        if (reason.includes("User does not exist")) {
+            statusCode = 404; // Not Found (or 400 Bad Request)
+            clientMessage = "User with this wallet address not found in the database. Please ensure the user is registered first.";
+        } else if (reason.includes("GitHub XP already granted")) {
+            statusCode = 409; // Conflict
+            clientMessage = "GitHub connection XP has already been granted to this wallet address.";
+        } else if (reason.includes("caller is not the")) { // Catches AccessControl errors
+            statusCode = 500; // Internal Server Error (misconfiguration)
+            clientMessage = "Server is not authorized to perform this action. Please contact support.";
+            console.error("CRITICAL SERVER CONFIG ERROR: Server wallet does not have XP_UPDATER_ROLE!");
+        }
+
+        console.log(`(grant-github-xp) Failure reason determined: ${reason}`);
+        res.status(statusCode).json({
+            success: false,
+            error: clientMessage,
+            details: reason // Send detailed reason for server logs/debugging
+        });
+    }
+});
+// +++ End New Endpoint +++
+
+
+// Keep original Server Start logic
+app.listen(PORT, () => {
+  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`🔑 Reward Contract Address: ${process.env.REWARD_CONTRACT_ADDRESS}`);
+  console.log(`🔑 User Database Contract Address: ${process.env.USER_DATABASE_CONTRACT_ADDRESS}`); // <<< Added log
+  console.log(`🔑 Server Wallet Address (Owner/XP Updater): ${new ethers.Wallet(process.env.PRIVATE_KEY).address}`); // <<< Log server wallet
+});
